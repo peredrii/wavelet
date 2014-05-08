@@ -232,8 +232,8 @@ double* pconv( double *arr, int num, double *Cl, double *Ch)
     sH = 0;
     for (int i = 0; i < 4; i++)
     {
-      sL += arr[(k + i) % M] * Cl[i];
-      sH += arr[(k + i) % M] * Ch[i];
+      sL += arr[(k + i) / M] * Cl[i];
+      sH += arr[(k + i) / M] * Ch[i];
     }
     out[k] = sL;
     out[k + 1] = sH;
@@ -271,13 +271,6 @@ PIC dwt2( PIC *P, double *Cl, double* Ch )
     free(p);
     free(v);
   }
-
-  /*
-  printf("Min\n");
-  printf("%.16f\n", Min(outpic.Pix, outpic.H * outpic.W));
-  printf("Max\n");
-  printf("%.16f\n", Max(outpic.Pix, outpic.H * outpic.W));
-  */
 
   /* 0..h/2, 0..w/2 */
   for (int i = 0, k = 0; i < outpic.H / 2, k < outpic.H; i++, k += 2)
@@ -347,147 +340,4 @@ void main( void )
   glutDisplayFunc(Display);
   glutMainLoop();
 }
-//void main( void )
-//{
-//  FILE *F;
-//  BITMAPFILEHEADER fh;
-//  BITMAPINFOHEADER ih;
-//  RGBQUAD pal[1000];
-//  unsigned char *pic, *row;
-//  int bpl, c, r, g, b, x, y;
-//
-//  if ((F = fopen("3.bmp", "rb")) == NULL)
-//  {
-//    printf("wrong");
-//    return;
-//  }
-//  if (fread(&fh, 1, sizeof(fh), F) != sizeof(fh))
-//    printf("wrong header");
-//
-//  if (fread(&ih, 1, sizeof(ih), F) != sizeof(ih))
-//    printf("wrong info header");  
-//  
-//  if (ih.biClrUsed == 0)
-//  {
-//    if (ih.biBitCount == 1)
-//      c = 2;
-//    else if (ih.biBitCount == 4)
-//      c = 16;
-//    else if (ih.biBitCount == 8)
-//      c = 256;
-//    else
-//      c = 0;
-//  }
-//  else
-//    c = ih.biClrUsed;
-//
-//  /* moved after headers, read the palette*/
-//  fseek(F, fh.bfOffBits, SEEK_SET);
-//  fread(pal, sizeof(RGBQUAD), c, F);
-//
-//  /* allocate memory now for picture, after palette */
-//  pic = (unsigned char *)malloc(ih.biWidth * ih.biHeight);  
-//  if (pic == NULL)
-//    printf("memory problem\n");
-//
-//
-//  if (ih.biBitCount == 1)
-//    bpl = (ih.biWidth + 7) / 8;
-//  else if (ih.biBitCount == 4)
-//    bpl = (ih.biWidth + 1) / 2;
-//  else if (ih.biBitCount == 8)
-//    bpl = ih.biWidth;
-//  else if (ih.biBitCount == 24)
-//    bpl = ih.biWidth * 3;
-//  else if (ih.biBitCount == 32)
-//    bpl = ih.biWidth * 4;
-//  else
-//  {
-//    fclose(F);
-//    free(pic);
-//  }
-//
-//  /* 4toby divided on 4 */
-//  bpl = (bpl + 3) / 4 * 4;
-//
-//  if ((row = (unsigned char *)malloc(bpl)) == NULL)
-//  {
-//    printf("allocating error");
-//    fclose(F);
-//    free(pic);
-//    return;
-//  }
-//
-//  for (y = ih.biHeight - 1; y >= 0; y--)
-//  {
-//    fread(row, bpl, 1, F);
-//    for (x = 0; x < ih.biWidth; x++)
-//    {
-//      if (ih.biBitCount == 1)
-//      {
-//        c = (row[x / 8] >> (7 - (x % 8))) & 1;
-//        b = pal[c].rgbBlue;
-//        g = pal[c].rgbGreen;
-//        r = pal[c].rgbRed;
-//      }
-//      else if (ih.biBitCount == 4)
-//      {
-//        c = (row[x / 2] >> 4 * (1 - (x % 2))) & 0xF;
-//        b = pal[c].rgbBlue;
-//        g = pal[c].rgbGreen;
-//        r = pal[c].rgbRed;        
-//      }
-//      else if (ih.biBitCount == 8)
-//      {
-//        c = row[x];
-//        b = pal[c].rgbBlue;
-//        g = pal[c].rgbGreen;
-//        r = pal[c].rgbRed;
-//      }
-//      else if (ih.biBitCount == 24)
-//      {
-//        b = row[x * 3 + 0];
-//        g = row[x * 3 + 1];
-//        r = row[x * 3 + 2];
-//      }
-//      else if (ih.biBitCount == 32)
-//      {
-//        b = row[x * 4 + 0];
-//        g = row[x * 4 + 1];
-//        r = row[x * 4 + 2];
-//      }
-//      c = (r * 30 + g * 59 + b * 11) / 100;
-//      pic[y * ih.biWidth + x] = c;                        
-//    }
-//  } 
-//
-//  free(row);
-//  fclose(F);
-//
-//  for (int i = 0; i < 4; i++)
-//    printf("%.16f\n", CH[i]);
-//
-//  
-//
-//  W = ih.biWidth;
-//  H = ih.biHeight;
-//  Img = pic;
-//
-//  double C[2] = {0.5, 0.5};
-//  double CC[2] = {0.5, -0.5};
-//  double corn[2] = {0.5, 0.5};
-//  double arrray[4] = {1, 2, 3, 4};
-//  dwt2(arrray, C, CC, 4, 1);
-//
-//
-//
-//  glutInitDisplayMode(GLUT_RGB);
-//  glutInitWindowPosition(0, 0);
-//  glutInitWindowSize(1000, 1000);
-//  glutCreateWindow("sdf");
-//  glutDisplayFunc(Display);
-//  glutMainLoop();
-//
-//  free(pic);
-//} 
 
