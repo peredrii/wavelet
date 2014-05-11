@@ -2,8 +2,14 @@
 #include <glut.h>
 #include <math.h>
 #include <windows.h>                   
+#include <stdlib.h>
 
 #define double float
+
+//double CL[2] = {0.5, 0.5};
+//double CH[2] = {0.5, -0.5};
+
+float MIN, MAX;
 
 double CL[4] = {(1 + sqrt(3.)) / (4 * sqrt(2.)),    // c0
                 (3 + sqrt(3.)) / (4 * sqrt(2.)),    // c1
@@ -202,10 +208,10 @@ int Load( PIC *P, char *FileName )
          
 /* Coefficient to high-freq-filter
  * NOT USED */
-double* hpf_coeffs( double *Cl )
+double * hpf_coeffs( double *Cl )
 {
   int N = sizeof(Cl)/sizeof(*Cl);
-  double* CHZ = (double *)malloc(N * sizeof(double));
+  double *CHZ = (double *)malloc(N * sizeof(double));
 
 
   for (int k = 0; k < N; k++)
@@ -218,22 +224,21 @@ double* hpf_coeffs( double *Cl )
 }
 
 /* Pair convolution. Dimensional transform */
-double* pconv( double *arr, int num, double *Cl, double *Ch)
+double *pconv( double *arr, int num, double *Cl, double *Ch)
 {
-  double* out = (double *)malloc(sizeof(double) * num);
+  double *out = (double *)malloc(sizeof(double) * num);
 
-  int M = 4;
+  int M = 2;
   double sL, sH;
 
   for (int k = 0; k < num; k += 2)
-
   {
     sL = 0;
     sH = 0;
     for (int i = 0; i < 4; i++)
     {
-      sL += arr[(k + i) / M] * Cl[i];
-      sH += arr[(k + i) / M] * Ch[i];
+      sL += arr[(k + i) % num] * Cl[i];
+      sH += arr[(k + i) % num] * Ch[i];
     }
     out[k] = sL;
     out[k + 1] = sH;
@@ -241,26 +246,47 @@ double* pconv( double *arr, int num, double *Cl, double *Ch)
   return out;
 }
 
+double *ipconv( double *arr, int num, double *Cl, double *Ch)
+{
+  double *out = (double *)malloc(sizeof(double) * num);
+
+  int M = 2;
+  double sL, sH;
+  bool flag = false;
+
+  for (int k = num - 2; k < num; k += 2)
+  {
+    sL = 0;
+    sH = 0;
+    for (int i = 0; i < 4; i++)
+    {
+      sL += arr[(k + i) % num] * Cl[i];
+      sH += arr[(k + i) % num] * Ch[i];
+    }
+    out[k] = sL;
+    out[k + 1] = sH;
+    if (k == (num - 2) && flag == false)
+    {
+      k = 0;
+      flag = true;
+    }
+  }
+  return out;
+}
+
+
 /* 2-dimensional transform */
 PIC dwt2( PIC *P, double *Cl, double* Ch )
 {
   PIC outpic, resoutpic;
   double *p;
+  double min, max;
 
   Create(&outpic, P->W, P->H);
   Create(&resoutpic, P->W, P->H);
   
-  /* handle rows */
-  for (int i = 0; i < P->H; i++)
-  {
-    p = pconv(&P->Pix[i * P->W], P->W, Cl, Ch);
-    for (int j = 0; j < P->W; j++)
-      outpic.Pix[i * P->W + j] = p[j]; //* 0.5;
-    free(p);
-  }                      
-
   /* handle columns*/      
-  for (int i = 0; /*0 && */i < P->W; i++)
+  for (int i = 0; i < P->W; i++)
   {
     double *v = (double *)malloc(sizeof(double) * P->H);
     for (int j = 0; j < P->H; j++)
@@ -272,50 +298,134 @@ PIC dwt2( PIC *P, double *Cl, double* Ch )
     free(v);
   }
 
-  /* 0..h/2, 0..w/2 */
-  for (int i = 0, k = 0; i < outpic.H / 2, k < outpic.H; i++, k += 2)
+  /* handle rows */
+  for (int i = 0; i < P->H; i += 2)
   {
-    for (int j = 0, l = 0; j < outpic.W / 2, l < outpic.W; j++, l += 2)
-    {
+    p = pconv(&P->Pix[i * P->W], P->W, Cl, Ch);
+    for (int j = 0; j < P->W; j++)
+      outpic.Pix[i * P->W + j] = p[j]; //* 0.5;  
+    free(p);
+  }                      
+  
+  
+  MIN = Min(outpic.Pix, outpic.H * outpic.W);
+  MAX = Max(outpic.Pix, outpic.H * outpic.W);
+  /*
+  printf("Min\n");
+  printf("%.16f\n", Min(outpic.Pix, outpic.H * outpic.W));
+  printf("Max\n");
+
+  printf("%.16f\n", Max(outpic.Pix, outpic.H * outpic.W));
+  */
+
+  /* 0..h/2, 0..w/2 */
+  for (int i = 0, k = 0; i < outpic.H / 2 && k < outpic.H; i++, k += 2)
+    for (int j = 0, l = 0; j < outpic.W / 2 &&  l < outpic.W; j++, l += 2)
+      resoutpic.Pix[i * outpic.W + j] = outpic.Pix[k * outpic.W  + l];         
+
+  /*
+  for (int i = 0; i < outpic.H; i++)
+    for (int j = 0; j < outpic.W; j++)
+      resoutpic.Pix[i * outpic.W + j] = outpic.Pix[i * outpic.W + j];
+  */
+  /* h/2..h, 0..w/2 */
+  for (int i = outpic.H / 2, k = 1; i < outpic.H && k < outpic.H; i++, k += 2)
+    for (int j = 0, l = 0; j < outpic.W / 2 && l < outpic.W; j++, l += 2)
       resoutpic.Pix[i * outpic.W + j] = outpic.Pix[k * outpic.W + l];         
-    }
-  }
+  /* 0..h/2, w/2..w */
+  for (int i = 0, k = 0; i < outpic.H / 2 && k < outpic.H; i++, k += 2)
+    for (int j = outpic.W / 2, l = 1; j < outpic.W && l < outpic.W; j++, l += 2)
+      resoutpic.Pix[i * outpic.W + j] = outpic.Pix[k * outpic.W + l];         
 
-  ///* h/2..h, 0..w/2 */
-  //for (int i = outpic.H / 2, k = 1; i < outpic.H, k < outpic.H; i++, k += 2)
-  //{
-  //  for (int j = 0, l = 0; j < outpic.W / 2, l < outpic.W; j++, l += 2)
-  //  {
-  //    resoutpic.Pix[i * outpic.W + j] = outpic.Pix[k * outpic.W + l];         
-  //  }
-  //}
+  /* h/2..h, w/2..w */
+  for (int i = outpic.H / 2, k = 1; i < outpic.H && k < outpic.H; i++, k += 2)
+    for (int j = outpic.W / 2, l = 1; j < outpic.W && l < outpic.W; j++, l += 2)
+      resoutpic.Pix[i * outpic.W + j] = outpic.Pix[k * outpic.W + l];         
 
-  ///* 0..h/2, w/2..w */
-  //for (int i = 0, k = 0; i < outpic.H / 2, k < outpic.H; i++, k += 2)
-  //{
-  //  for (int j = outpic.W / 2, l = 1; j < outpic.W, l < outpic.W; j++, l += 2)
-  //  {
-  //    resoutpic.Pix[i * outpic.W + j] = outpic.Pix[k * outpic.W + l];         
-  //  }
-  //}
 
-  ///* h/2..h, w/2..w */
-  //for (int i = outpic.H / 2, k = 1; i < outpic.H, k < outpic.H; i++, k += 2)
-  //{
-  //  for (int j = outpic.W / 2, l = 1; j < outpic.W, l < outpic.W; j++, l += 2)
-  //  {
-  //    resoutpic.Pix[i * outpic.W + j] = outpic.Pix[k * outpic.W + l];         
-  //  }
-  //}
+  for (int i = 0; i < resoutpic.W * resoutpic.H; i++)
+    resoutpic.Pix[i] = (resoutpic.Pix[i] - MIN) / (MAX - MIN);
 
-  //for (int i = 0; i < resoutpic.W * resoutpic.H; i++)
-    //resoutpic.Pix[i] = (resoutpic.Pix[i] + 1) / (resoutpic.Pix[i] + 2);
+  return resoutpic;
+}
+
+PIC idwt2( PIC *P, double *iCl, double *iCh )
+{
+  PIC resoutpic, outpic;   
+  float min, max;
+  double *p;
+
+  Create(&outpic, P->W, P->H);
+  Create(&resoutpic, P->W, P->H);
+  //min = Min(P->Pix, P->H * P->W);
+  //max = Max(P->Pix, P->H * P->W);
+  /*
+  printf("Min\n");
+  printf("%.16f\n", Min(outpic.Pix, outpic.H * outpic.W));
+  printf("Max\n");
+
+  printf("%.16f\n", Max(outpic.Pix, outpic.H * outpic.W));
+  */
+
+  /* 0..h/2, 0..w/2 */
+  for (int i = 0, k = 0; k < P->H; i++, k += 2)
+    for (int j = 0, l = 0; l < P->W; j++, l += 2)
+      outpic.Pix[k * outpic.W + l] = P->Pix[i * outpic.W  + j];         
+
+  /* h/2..h, 0..w/2 */
+  for (int i = P->H / 2, k = 1; i < P->H && k < P->H; i++, k += 2)
+    for (int j = 0, l = 0; j < P->W / 2 && l < P->W; j++, l += 2)
+      outpic.Pix[k * outpic.W + l] = P->Pix[i * outpic.W  + j];         
+
+  /* 0..h/2, w/2..w */
+  for (int i = 0, k = 0; i < P->H / 2 && k < P->H; i++, k += 2)
+    for (int j = P->W / 2, l = 1; j < P->W && l < P->W; j++, l += 2)
+      outpic.Pix[k * outpic.W + l] = P->Pix[i * outpic.W  + j];               
+
+  /* h/2..h, w/2..w */
+  for (int i = P->H / 2, k = 1; i < P->H && k < P->H; i++, k += 2)
+    for (int j = P->W / 2, l = 1; j < P->W && l < P->W; j++, l += 2)
+      outpic.Pix[k * outpic.W + l] = P->Pix[i * outpic.W  + j];               
+
+
+  for (int i = 0; i < outpic.W * outpic.H; i++)
+    outpic.Pix[i] = (outpic.Pix[i] + MIN) * (MAX - MIN);
+
+  /* handle columns*/      
+  for (int i = 0; i < outpic.W; i++)
+  {
+    double *v = (double *)malloc(sizeof(double) * outpic.H);
+    for (int j = 0; j < outpic.H; j++)
+      v[j] = outpic.Pix[j * outpic.W + i];
+    p = ipconv(v, resoutpic.H, iCl, iCh);
+    for (int j = 0; j < outpic.H; j++)
+      resoutpic.Pix[j * outpic.W + i] = p[j];
+    free(p);
+    free(v);
+  }               
+
+  /* handle rows */
+  for (int i = 0; i < outpic.H; i += 2)
+  {
+    p = ipconv(&outpic.Pix[i * outpic.W], outpic.W, iCl, iCh);
+    for (int j = 0; j < outpic.W; j++)
+      resoutpic.Pix[i * outpic.W + j] = p[j]; //* 0.5;  
+    free(p);
+  }  
+
+  min = Min(resoutpic.Pix, resoutpic.H * resoutpic.W);
+  max = Max(resoutpic.Pix, resoutpic.H * resoutpic.W);
+/*
+  for (int i = 0; i < resoutpic.W * resoutpic.H; i++)
+    resoutpic.Pix[i] = (resoutpic.Pix[i] - min) / (max - min);*/
+
 
   return resoutpic;
 }
 
 void Display( void )
 {
+  glClearColor(1, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
   glPixelZoom(1, -1);
   glRasterPos2s(-1, 1);
@@ -327,17 +437,29 @@ void Display( void )
   glutSwapBuffers();
 }
 
+void Keyboard( unsigned char Key, int X, int Y )
+{
+  if (Key == 27)
+    exit(0);
+  else if (Key == 'f')
+    glutFullScreen();
+}
+
 void main( void )
 {
-  Load(&WorkPic, "4.bmp");
+  //for (int i = 0; i < 4; i++)
+    //printf("%.16f ", CL[i]);//*sqrt(2.0));
+  Load(&WorkPic, "3.bmp");
   WavePic = dwt2(&WorkPic, CL, CH);
-
+  WorkPic = idwt2(&WavePic, OCL, OCH);
   glutInitDisplayMode(GLUT_RGB);
 
   glutInitWindowPosition(0, 0);
   glutInitWindowSize(1000, 1000);
   glutCreateWindow("sdf");
+
   glutDisplayFunc(Display);
+  glutKeyboardFunc(Keyboard);
+
   glutMainLoop();
 }
-
